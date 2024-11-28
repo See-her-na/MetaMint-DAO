@@ -129,13 +129,6 @@
         ERR-SYSTEM-LOCKED
         (ok true)))
 
-(define-private (check-account-status (address principal))
-    (match (map-get? restricted-accounts {user: address})
-        account-status (if (>= block-height (get until account-status))
-                           (ok true)
-                           ERR-RESTRICTED)
-        (ok true)))
-
 ;; Safe Transfer Implementation
 (define-private (safe-transfer-nft (nft-id uint) (from principal) (to principal) (amount uint))
     (let ((validated-nft-id (try! (validate-nft-id nft-id))))
@@ -306,3 +299,12 @@
         (var-set emergency-mode-active true)
         (var-set system-locked true)
         (ok true)))
+
+(define-public (unban-account (user principal))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-ADMIN) ERR-UNAUTHORIZED)
+        (ok (map-set restricted-accounts
+            {user: user}
+            {until: u0,
+             cause: "Restriction lifted"}))))
+
