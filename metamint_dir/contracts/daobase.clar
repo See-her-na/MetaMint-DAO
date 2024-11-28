@@ -11,7 +11,6 @@
 (define-constant ERR-INVALID-STATE (err u1007))
 (define-constant ERR-OPERATION-FAILED (err u1008))
 (define-constant ERR-TIMEOUT (err u1009))
-(define-constant ERR-RESTRICTED (err u1010))
 (define-constant ERR-INVALID-NFT (err u1011))
 
 ;; Constants
@@ -23,7 +22,6 @@
 (define-constant VOTE-DURATION u1008) ;; ~7 days in blocks
 (define-constant MIN-GOVERNANCE-STAKE u100000000) ;; Minimum stake requirement
 (define-constant REWARDS-PERIOD u144) ;; ~24 hours in blocks
-(define-constant MAX-BAN-DURATION u4320) ;; 30 days in blocks
 (define-constant MAX-NFT-ID u1000000) ;; Maximum valid NFT ID
 (define-constant MIN-NFT-ID u1) ;; Minimum valid NFT ID
 
@@ -93,11 +91,6 @@
      proposal: (string-utf8 256),
      quorum: uint})
 
-(define-map restricted-accounts
-    {user: principal}
-    {until: uint,
-     cause: (string-utf8 256)})
-
 (define-map reward-distribution
     {cycle: uint}
     {pool-size: uint,
@@ -155,6 +148,7 @@
             
             (ok true))))
 
+
 ;; Core NFT Functions
 (define-public (mint-nft
     (asset-uri (string-utf8 256))
@@ -162,7 +156,6 @@
     (total-editions uint))
     (begin
         (try! (check-system-status))
-        (try! (check-account-status tx-sender))
         (asserts! (>= (len asset-uri) u10) ERR-BAD-INPUT)
         (asserts! (<= commission-rate MAX-COMMISSION-RATE) ERR-BAD-INPUT)
         (asserts! (and 
@@ -180,7 +173,7 @@
                  commission-rate: commission-rate,
                  total-editions: total-editions,
                  tradeable: false,
-                 mint-block: block-height,
+                 mint-block: u0, ;; Replace with appropriate method to get block height
                  total-sales: u0,
                  authenticated: false})
             
@@ -201,7 +194,6 @@
         ((validated-nft-id (try! (validate-nft-id nft-id))))
         (begin
             (try! (check-system-status))
-            (try! (check-account-status tx-sender))
             
             (asserts! (unwrap! (verify-nft-owner validated-nft-id tx-sender) ERR-MISSING)
                 ERR-UNAUTHORIZED)
@@ -221,14 +213,14 @@
                     (< quantity (pow u2 u64)))
                     ERR-BAD-INPUT)
                 
-                (asserts! (>= block-height (get locked-until balance)) 
+                (asserts! (>= u0 (get locked-until balance)) 
                     ERR-INVALID-STATE)
                 
                 (map-set market-entries
                     {nft-id: validated-nft-id}
                     {price: price,
                      vendor: tx-sender,
-                     valid-until: (+ block-height u1440),
+                     valid-until: (+ u0 u1440), 
                      quantity: quantity,
                      auction-info: none})
                 (ok true)))))
@@ -238,7 +230,6 @@
     (let ((validated-nft-id (try! (validate-nft-id nft-id))))
         (begin
             (try! (check-system-status))
-            (try! (check-account-status tx-sender))
             
             (asserts! (and (>= validated-nft-id MIN-NFT-ID) 
                            (<= validated-nft-id MAX-NFT-ID)) 
@@ -250,7 +241,7 @@
                   (vendor (get vendor listing))
                   (quantity (get quantity listing)))
                 
-                (asserts! (<= block-height (get valid-until listing)) ERR-TIMEOUT)
+                (asserts! (<= u0 (get valid-until listing)) ERR-TIMEOUT) 
                 (asserts! (not (is-eq tx-sender vendor)) ERR-BAD-INPUT)
                 
                 (let ((balance (stx-get-balance tx-sender)))
@@ -299,12 +290,4 @@
         (var-set emergency-mode-active true)
         (var-set system-locked true)
         (ok true)))
-
-(define-public (unban-account (user principal))
-    (begin
-        (asserts! (is-eq tx-sender CONTRACT-ADMIN) ERR-UNAUTHORIZED)
-        (ok (map-set restricted-accounts
-            {user: user}
-            {until: u0,
-             cause: "Restriction lifted"}))))
 
